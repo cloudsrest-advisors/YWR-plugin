@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from datetime import date
 from typing import Optional
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 
 # Create the FastAPI app first
 app = FastAPI(
@@ -15,10 +16,15 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Mount static files
+# Mount .well-known for ai-plugin.json and logo.png
 app.mount("/.well-known", StaticFiles(directory=".well-known"), name="static")
-app.mount("/", StaticFiles(directory="."), name="root")
 
+# Explicit route for openapi.yaml
+@app.get("/openapi.yaml", include_in_schema=False)
+def get_openapi_yaml():
+    return FileResponse("openapi.yaml", media_type="text/yaml")
+
+# Database settings
 DATABASE_URL = os.getenv("DATABASE_URL")
 MIN_CONN = 1
 MAX_CONN = 10
