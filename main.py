@@ -6,15 +6,24 @@ from fastapi import FastAPI, HTTPException, APIRouter
 from pydantic import BaseModel
 from datetime import date
 from typing import Optional
+from fastapi.staticfiles import StaticFiles
 
-app = FastAPI(title="YWR Factor Scores API",
-              description="Retrieve the latest YWR factor model scores, QARV scores, and generated reports by ticker",
-              version="1.0.0")
+# Create the FastAPI app first
+app = FastAPI(
+    title="YWR Factor Scores API",
+    description="Retrieve the latest YWR factor model scores, QARV scores, and generated reports by ticker",
+    version="1.0.0"
+)
+
+# Mount static files
+app.mount("/.well-known", StaticFiles(directory=".well-known"), name="static")
+app.mount("/", StaticFiles(directory="."), name="root")
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 MIN_CONN = 1
 MAX_CONN = 10
 _db_pool: Optional[pool.SimpleConnectionPool] = None
+
 
 class FactorScoreResponse(BaseModel):
     ticker: str
@@ -28,12 +37,16 @@ class FactorScoreResponse(BaseModel):
     total_score: float
     date: date
 
+
 @app.on_event("startup")
 def startup():
     global _db_pool
     if not DATABASE_URL:
         raise RuntimeError("DATABASE_URL environment variable is not set")
-    _db_pool = psycopg2.pool.SimpleConnectionPool(MIN_CONN, MAX_CONN, dsn=DATABASE_URL)
+    _db_pool = psycopg2.pool.SimpleConnectionPool(
+        MIN_CONN, MAX_CONN, dsn=DATABASE_URL
+    )
+
 
 @app.on_event("shutdown")
 def shutdown():
@@ -42,23 +55,29 @@ def shutdown():
         _db_pool.closeall()
         _db_pool = None
 
+
 def get_db_connection():
     if not _db_pool:
         raise RuntimeError("Database pool not initialized")
     return _db_pool.getconn()
 
+
 def put_db_connection(conn):
     if _db_pool and conn:
         _db_pool.putconn(conn)
 
-# New: modular routers with /v1 prefix
+
+# Routers
 health_router = APIRouter(prefix="/v1", tags=["health"])
+
 
 @health_router.get("/health")
 def health():
     return {"status": "ok"}
 
+
 factor_router = APIRouter(prefix="/v1/factor_scores", tags=["factor_scores"])
+
 
 @factor_router.get("/{ticker}", response_model=FactorScoreResponse)
 def read_factor_scores(ticker: str):
@@ -83,16 +102,23 @@ def read_factor_scores(ticker: str):
     finally:
         put_db_connection(conn)
 
-# Placeholder routers for future services (QARV, reports)
+
+# Placeholder routers for future services
 qarv_router = APIRouter(prefix="/v1/qarv_scores", tags=["qarv_scores"])
+
+
 @qarv_router.get("/{ticker}")
 def get_qarv_scores(ticker: str):
     raise HTTPException(status_code=501, detail="QARV scores not implemented")
 
+
 reports_router = APIRouter(prefix="/v1/reports", tags=["reports"])
+
+
 @reports_router.get("/{ticker}")
 def get_report(ticker: str):
     raise HTTPException(status_code=501, detail="Reports not implemented")
+
 
 # Register routers
 app.include_router(health_router)
