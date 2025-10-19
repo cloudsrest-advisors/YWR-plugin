@@ -22,6 +22,11 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# Root route for Railway health check
+@app.get("/", include_in_schema=False)
+def root():
+    return {"status": "ok"}
+
 # Mount .well-known for ai-plugin.json and logo.png only if directory exists
 WELL_KNOWN_DIR = os.path.join(BASE_DIR, ".well-known")
 if os.path.isdir(WELL_KNOWN_DIR):
