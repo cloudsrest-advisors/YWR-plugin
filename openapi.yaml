@@ -147,7 +147,6 @@ components:
             date:
               type: string
               format: date
-              description: YYYY-MM-DD
 
     QarvScoreResponse:
       allOf:

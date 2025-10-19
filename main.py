@@ -1,5 +1,6 @@
 # main.py
 import os
+import logging
 import psycopg2
 from psycopg2 import pool
 from fastapi import FastAPI, HTTPException, APIRouter
@@ -9,6 +10,11 @@ from typing import Optional
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 # Create the FastAPI app first
 app = FastAPI(
     title="YWR Factor Scores API",
@@ -16,13 +22,21 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Mount .well-known for ai-plugin.json and logo.png
-app.mount("/.well-known", StaticFiles(directory=".well-known"), name="static")
+# Mount .well-known for ai-plugin.json and logo.png only if directory exists
+WELL_KNOWN_DIR = os.path.join(BASE_DIR, ".well-known")
+if os.path.isdir(WELL_KNOWN_DIR):
+    app.mount("/.well-known", StaticFiles(directory=WELL_KNOWN_DIR), name="static")
+else:
+    logger.warning(".well-known directory not found at %s; /.well-known not mounted", WELL_KNOWN_DIR)
 
 # Explicit route for openapi.yaml
 @app.get("/openapi.yaml", include_in_schema=False)
 def get_openapi_yaml():
-    return FileResponse("openapi.yaml", media_type="text/yaml")
+    file_path = os.path.join(BASE_DIR, "openapi.yaml")
+    if not os.path.isfile(file_path):
+        logger.warning("openapi.yaml not found at %s", file_path)
+        raise HTTPException(status_code=404, detail="openapi.yaml not found")
+    return FileResponse(file_path, media_type="application/yaml")
 
 # Database settings
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -48,10 +62,17 @@ class FactorScoreResponse(BaseModel):
 def startup():
     global _db_pool
     if not DATABASE_URL:
-        raise RuntimeError("DATABASE_URL environment variable is not set")
-    _db_pool = psycopg2.pool.SimpleConnectionPool(
-        MIN_CONN, MAX_CONN, dsn=DATABASE_URL
-    )
+        logger.warning("DATABASE_URL environment variable is not set; skipping DB pool initialization")
+        return
+    try:
+        _db_pool = psycopg2.pool.SimpleConnectionPool(
+            MIN_CONN, MAX_CONN, dsn=DATABASE_URL
+        )
+        logger.info("Database pool initialized")
+    except Exception as e:
+        logger.exception("Failed to initialize database pool")
+        # re-raise so the app fails fast in production; for local testing you can comment this
+        raise
 
 
 @app.on_event("shutdown")
