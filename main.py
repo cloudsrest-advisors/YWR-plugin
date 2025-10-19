@@ -2,13 +2,13 @@
 import os
 import psycopg2
 from psycopg2 import pool
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, APIRouter
 from pydantic import BaseModel
 from datetime import date
 from typing import Optional
 
 app = FastAPI(title="YWR Factor Scores API",
-              description="Retrieve the latest YWR factor scores for a stock ticker",
+              description="Retrieve the latest YWR factor model scores, QARV scores, and generated reports by ticker",
               version="1.0.0")
 
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -51,7 +51,16 @@ def put_db_connection(conn):
     if _db_pool and conn:
         _db_pool.putconn(conn)
 
-@app.get("/factor_scores/{ticker}", response_model=FactorScoreResponse)
+# New: modular routers with /v1 prefix
+health_router = APIRouter(prefix="/v1", tags=["health"])
+
+@health_router.get("/health")
+def health():
+    return {"status": "ok"}
+
+factor_router = APIRouter(prefix="/v1/factor_scores", tags=["factor_scores"])
+
+@factor_router.get("/{ticker}", response_model=FactorScoreResponse)
 def read_factor_scores(ticker: str):
     """Return the latest YWR factor scores for a given stock ticker."""
     query = """
@@ -73,3 +82,20 @@ def read_factor_scores(ticker: str):
             return dict(zip(columns, row))
     finally:
         put_db_connection(conn)
+
+# Placeholder routers for future services (QARV, reports)
+qarv_router = APIRouter(prefix="/v1/qarv_scores", tags=["qarv_scores"])
+@qarv_router.get("/{ticker}")
+def get_qarv_scores(ticker: str):
+    raise HTTPException(status_code=501, detail="QARV scores not implemented")
+
+reports_router = APIRouter(prefix="/v1/reports", tags=["reports"])
+@reports_router.get("/{ticker}")
+def get_report(ticker: str):
+    raise HTTPException(status_code=501, detail="Reports not implemented")
+
+# Register routers
+app.include_router(health_router)
+app.include_router(factor_router)
+app.include_router(qarv_router)
+app.include_router(reports_router)

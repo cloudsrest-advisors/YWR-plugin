@@ -1,15 +1,18 @@
 {
   "schema_version": "v1",
-  "name_for_human": "YWR Factor Scores",
-  "name_for_model": "ywr_factor_scores",
-  "description_for_human": "Access the latest YWR factor model scores for stock tickers.",
-  "description_for_model": "Plugin to fetch the latest YWR factor scores from a Neon database. Use it to retrieve factor scores for a given ticker.",
-  "auth": { "type": "none" },
+  "name_for_human": "YWR Intelligence",
+  "name_for_model": "ywr_intelligence",
+  "description_for_human": "Retrieve YWR factor scores, QARV scores, and AI-generated reports for tickers.",
+  "description_for_model": "Plugin to get financial factor scores, QARV scores, and generated investment reports. Use /v1 endpoints.",
+  "auth": {
+    "type": "none"
+  },
   "api": {
     "type": "openapi",
-    "url": "https://api.ywr-intelligence.world/openapi.yaml"
+    "url": "https://api.ywr-intelligence.world/openapi.yaml",
+    "is_user_authenticated": false
   },
-  "logo_url": "https://api.ywr-intelligence.world/logo.png",
-  "contact_email": "info@ywr.world",
-  "legal_info_url": "https://ywr.world/legal"
+  "logo_url": "https://api.ywr-intelligence.world/.well-known/logo.png",
+  "contact_email": "support@ywr-intelligence.world",
+  "legal_info_url": "https://ywr-intelligence.world/legal"
 }
