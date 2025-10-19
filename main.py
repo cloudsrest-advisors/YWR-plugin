@@ -9,8 +9,6 @@ from datetime import date
 from typing import Optional
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-import signal
-import sys
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -65,16 +63,8 @@ class FactorScoreResponse(BaseModel):
     date: date
 
 
-def _handle_signal(signum, frame):
-    logger.warning("Received signal %s, initiating shutdown", signum)
-    # let FastAPI/uvicorn run shutdown handlers
-    try:
-        sys.exit(0)
-    except SystemExit:
-        pass
-
-signal.signal(signal.SIGTERM, _handle_signal)
-signal.signal(signal.SIGINT, _handle_signal)
+# Do not register custom signal handlers — let uvicorn manage signals
+# This avoids unexpected early exits under platform SIGTERM
 
 @app.on_event("startup")
 def startup():
@@ -128,6 +118,8 @@ factor_router = APIRouter(prefix="/v1/factor_scores", tags=["factor_scores"])
 @factor_router.get("/{ticker}", response_model=FactorScoreResponse)
 def read_factor_scores(ticker: str):
     """Return the latest YWR factor scores for a given stock ticker."""
+    if not _db_pool:
+        raise HTTPException(status_code=503, detail="Database not configured")
     query = """
         SELECT ticker, name, country, industry, mkt_val,
                estimate_score, value_score, price_score, total_score, date
