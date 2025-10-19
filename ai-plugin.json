@@ -1,0 +1,15 @@
+{
+  "schema_version": "v1",
+  "name_for_human": "YWR Factor Scores",
+  "name_for_model": "ywr_factor_scores",
+  "description_for_human": "Access the latest YWR factor model scores for stock tickers.",
+  "description_for_model": "Plugin to fetch the latest YWR factor scores from a Neon database. Use it to retrieve factor scores for a given ticker.",
+  "auth": { "type": "none" },
+  "api": {
+    "type": "openapi",
+    "url": "https://api.ywr-intelligence.world/openapi.yaml"
+  },
+  "logo_url": "https://api.ywr-intelligence.world/logo.png",
+  "contact_email": "info@ywr.world",
+  "legal_info_url": "https://ywr.world/legal"
+}

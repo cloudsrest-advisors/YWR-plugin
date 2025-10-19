@@ -1,0 +1,56 @@
+openapi: 3.0.1
+info:
+  title: YWR Factor Scores API
+  description: Retrieve the latest YWR factor model scores by ticker.
+  version: "1.0.0"
+servers:
+  - url: https://api.ywr-intelligence.world
+paths:
+  /factor_scores/{ticker}:
+    get:
+      summary: Get latest YWR factor scores
+      operationId: getFactorScores
+      parameters:
+        - name: ticker
+          in: path
+          required: true
+          description: Stock ticker symbol, e.g. AAPL
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Latest factor scores
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FactorScoreResponse'
+        '404':
+          description: Not found
+      tags:
+        - factor_scores
+components:
+  schemas:
+    FactorScoreResponse:
+      type: object
+      properties:
+        ticker:
+          type: string
+        name:
+          type: string
+        country:
+          type: string
+        industry:
+          type: string
+        mkt_val:
+          type: number
+        estimate_score:
+          type: number
+        value_score:
+          type: number
+        price_score:
+          type: number
+        total_score:
+          type: number
+        date:
+          type: string
+          description: Latest record date (YYYY-MM-DD)
