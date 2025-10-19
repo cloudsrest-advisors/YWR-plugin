@@ -10,18 +10,12 @@ from typing import Optional
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 import traceback
+from contextlib import asynccontextmanager
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-# Create the FastAPI app first
-app = FastAPI(
-    title="YWR Factor Scores API",
-    description="Retrieve the latest YWR factor model scores, QARV scores, and generated reports by ticker",
-    version="1.0.0"
-)
 
 # Root route for Railway health check
 @app.get("/", include_in_schema=False)
@@ -67,35 +61,36 @@ class FactorScoreResponse(BaseModel):
 # Do not register custom signal handlers — let uvicorn manage signals
 # This avoids unexpected early exits under platform SIGTERM
 
-@app.on_event("startup")
-def startup():
+@asynccontextmanager
+async def lifespan(app):
     global _db_pool
     logger.info("Starting app PID=%s PORT=%s DATABASE_URL_set=%s", os.getpid(), os.getenv("PORT"), bool(os.getenv("DATABASE_URL")))
     if not DATABASE_URL:
         logger.warning("DATABASE_URL environment variable is not set; skipping DB pool initialization")
-        return
-    try:
-        _db_pool = psycopg2.pool.SimpleConnectionPool(
-            MIN_CONN, MAX_CONN, dsn=DATABASE_URL
-        )
-        logger.info("Database pool initialized")
-    except Exception:
-        logger.exception("Failed to initialize database pool; continuing without DB (endpoints will return 503)")
-        _db_pool = None
+    else:
+        try:
+            _db_pool = psycopg2.pool.SimpleConnectionPool(MIN_CONN, MAX_CONN, dsn=DATABASE_URL)
+            logger.info("Database pool initialized")
+        except Exception:
+            logger.exception("Failed to initialize database pool; continuing without DB (endpoints will return 503)")
+            _db_pool = None
 
-@app.exception_handler(Exception)
-async def unhandled_exception_handler(request, exc):
-    logger.exception("Unhandled exception for request %s %s: %s", request.method, request.url, exc)
-    return JSONResponse(status_code=500, content={"detail": "Internal server error"})
+    yield
 
-@app.on_event("shutdown")
-def shutdown():
-    global _db_pool
     logger.info("Application shutdown starting (PID=%s)", os.getpid())
     if _db_pool:
         _db_pool.closeall()
         _db_pool = None
     logger.info("Application shutdown complete")
+
+
+# Create the FastAPI app using the lifespan handler
+app = FastAPI(
+    title="YWR Factor Scores API",
+    description="Retrieve the latest YWR factor model scores, QARV scores, and generated reports by ticker",
+    version="1.0.0",
+    lifespan=lifespan
+)
 
 
 def get_db_connection():
