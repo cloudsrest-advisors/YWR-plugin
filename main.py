@@ -9,6 +9,8 @@ from datetime import date
 from typing import Optional
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+import signal
+import sys
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -63,6 +65,17 @@ class FactorScoreResponse(BaseModel):
     date: date
 
 
+def _handle_signal(signum, frame):
+    logger.warning("Received signal %s, initiating shutdown", signum)
+    # let FastAPI/uvicorn run shutdown handlers
+    try:
+        sys.exit(0)
+    except SystemExit:
+        pass
+
+signal.signal(signal.SIGTERM, _handle_signal)
+signal.signal(signal.SIGINT, _handle_signal)
+
 @app.on_event("startup")
 def startup():
     global _db_pool
@@ -74,18 +87,19 @@ def startup():
             MIN_CONN, MAX_CONN, dsn=DATABASE_URL
         )
         logger.info("Database pool initialized")
-    except Exception as e:
-        logger.exception("Failed to initialize database pool")
-        # re-raise so the app fails fast in production; for local testing you can comment this
-        raise
-
+    except Exception:
+        logger.exception("Failed to initialize database pool; continuing without DB (endpoints will return 503)")
+        _db_pool = None
+        # do NOT re-raise here so the process stays up for health checks
 
 @app.on_event("shutdown")
 def shutdown():
     global _db_pool
+    logger.info("Application shutdown starting")
     if _db_pool:
         _db_pool.closeall()
         _db_pool = None
+    logger.info("Application shutdown complete")
 
 
 def get_db_connection():
