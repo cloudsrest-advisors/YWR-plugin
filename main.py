@@ -8,7 +8,8 @@ from pydantic import BaseModel
 from datetime import date
 from typing import Optional
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
+import traceback
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -69,6 +70,7 @@ class FactorScoreResponse(BaseModel):
 @app.on_event("startup")
 def startup():
     global _db_pool
+    logger.info("Starting app PID=%s PORT=%s DATABASE_URL_set=%s", os.getpid(), os.getenv("PORT"), bool(os.getenv("DATABASE_URL")))
     if not DATABASE_URL:
         logger.warning("DATABASE_URL environment variable is not set; skipping DB pool initialization")
         return
@@ -80,12 +82,16 @@ def startup():
     except Exception:
         logger.exception("Failed to initialize database pool; continuing without DB (endpoints will return 503)")
         _db_pool = None
-        # do NOT re-raise here so the process stays up for health checks
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request, exc):
+    logger.exception("Unhandled exception for request %s %s: %s", request.method, request.url, exc)
+    return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
 @app.on_event("shutdown")
 def shutdown():
     global _db_pool
-    logger.info("Application shutdown starting")
+    logger.info("Application shutdown starting (PID=%s)", os.getpid())
     if _db_pool:
         _db_pool.closeall()
         _db_pool = None
