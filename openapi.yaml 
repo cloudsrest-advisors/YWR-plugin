@@ -1,22 +1,43 @@
 openapi: 3.0.1
 info:
-  title: YWR Factor Scores API
-  description: Retrieve the latest YWR factor model scores by ticker.
+  title: YWR Intelligence API
   version: "1.0.0"
+  description: >
+    API to retrieve YWR factor scores, QARV scores, and AI-generated investment reports for tickers.
 servers:
   - url: https://api.ywr-intelligence.world
 paths:
-  /factor_scores/{ticker}:
+  /v1/health:
     get:
-      summary: Get latest YWR factor scores
+      summary: Service health
+      operationId: getHealth
+      tags:
+        - health
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+
+  /v1/factor_scores/{ticker}:
+    get:
+      summary: Get latest YWR factor scores for a ticker
       operationId: getFactorScores
+      tags:
+        - factor_scores
       parameters:
         - name: ticker
           in: path
           required: true
-          description: Stock ticker symbol, e.g. AAPL
           schema:
             type: string
+          description: Stock ticker (e.g. AAPL)
       responses:
         '200':
           description: Latest factor scores
@@ -25,12 +46,73 @@ paths:
               schema:
                 $ref: '#/components/schemas/FactorScoreResponse'
         '404':
-          description: Not found
+          description: Ticker not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /v1/qarv_scores/{ticker}:
+    get:
+      summary: Get latest QARV scores for a ticker
+      operationId: getQarvScores
       tags:
-        - factor_scores
+        - qarv_scores
+      parameters:
+        - name: ticker
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Latest QARV scores
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QarvScoreResponse'
+        '404':
+          description: Ticker not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /v1/reports/{ticker}:
+    get:
+      summary: Get AI-generated investment report for a ticker
+      operationId: getReport
+      tags:
+        - reports
+      parameters:
+        - name: ticker
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Generated report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportResponse'
+        '404':
+          description: Ticker not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
 components:
   schemas:
-    FactorScoreResponse:
+    ScoreMetadata:
       type: object
       properties:
         ticker:
@@ -43,14 +125,79 @@ components:
           type: string
         mkt_val:
           type: number
-        estimate_score:
-          type: number
-        value_score:
-          type: number
-        price_score:
-          type: number
-        total_score:
-          type: number
-        date:
+          format: float
+
+    FactorScoreResponse:
+      allOf:
+        - $ref: '#/components/schemas/ScoreMetadata'
+        - type: object
+          properties:
+            estimate_score:
+              type: number
+              format: float
+            value_score:
+              type: number
+              format: float
+            price_score:
+              type: number
+              format: float
+            total_score:
+              type: number
+              format: float
+            date:
+              type: string
+              format: date
+              description: YYYY-MM-DD
+
+    QarvScoreResponse:
+      allOf:
+        - $ref: '#/components/schemas/ScoreMetadata'
+        - type: object
+          properties:
+            qarv_metric:
+              type: number
+              format: float
+            components:
+              type: object
+              additionalProperties:
+                type: number
+                format: float
+
+    ReportSection:
+      type: object
+      properties:
+        title:
           type: string
-          description: Latest record date (YYYY-MM-DD)
+        content:
+          type: string
+
+    ReportResponse:
+      type: object
+      properties:
+        ticker:
+          type: string
+        generated_at:
+          type: string
+          format: date-time
+        summary:
+          type: string
+        sections:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReportSection'
+
+    Error:
+      type: object
+      properties:
+        detail:
+          type: string
+
+tags:
+  - name: health
+    description: Health and status endpoints
+  - name: factor_scores
+    description: YWR factor model scores endpoints
+  - name: qarv_scores
+    description: QARV score endpoints
+  - name: reports
+    description: AI-generated investment reports
