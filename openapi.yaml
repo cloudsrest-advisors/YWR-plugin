@@ -190,6 +190,7 @@ components:
       properties:
         detail:
           type: string
+          description: Error message
 
 tags:
   - name: health
