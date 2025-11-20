@@ -37,7 +37,12 @@ paths:
           required: true
           schema:
             type: string
-          description: Stock ticker (e.g. AAPL)
+          description: >
+            Returns the latest YWR factor model scores for a single stock.
+            The `ticker` path parameter can be a FactSet ticker (e.g. FDS-US)
+            or an alternate symbol such as an FMP-style ticker (e.g. AAPL).
+            The API will automatically resolve and map the ticker internally.
+            If you are unsure of the correct ticker, first call /v1/tickers/resolve.
       responses:
         '200':
           description: Latest factor scores
@@ -53,6 +58,50 @@ paths:
                 $ref: '#/components/schemas/Error'
         '500':
           description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /v1/tickers/resolve:
+    get:
+      summary: Resolve tickers by name or alternate symbols
+      operationId: resolveTicker
+      tags:
+        - tickers
+      parameters:
+        - name: query
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Company name, FactSet ticker, or alternate ticker (e.g. AAPL, MSFT, TSLA).
+            Use this endpoint whenever you are not sure which ticker to use for other endpoints,
+            or when the user gives a company name instead of a specific ticker.
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 20
+            default: 5
+          description: Maximum number of matches to return
+      responses:
+        '200':
+          description: Matching tickers
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TickerResolutionResponse'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: No matching tickers
           content:
             application/json:
               schema:
@@ -185,6 +234,32 @@ components:
           items:
             $ref: '#/components/schemas/ReportSection'
 
+    TickerMatch:
+      type: object
+      properties:
+        factset_ticker:
+          type: string
+          nullable: true
+        fmp_ticker:
+          type: string
+          nullable: true
+        name:
+          type: string
+          nullable: true
+        source:
+          type: string
+          description: Data source used for the match (e.g. factor_scores or ticker_map)
+
+    TickerResolutionResponse:
+      type: object
+      properties:
+        query:
+          type: string
+        matches:
+          type: array
+          items:
+            $ref: '#/components/schemas/TickerMatch'
+
     Error:
       type: object
       properties:
@@ -199,5 +274,7 @@ tags:
     description: YWR factor model scores endpoints
   - name: qarv_scores
     description: QARV score endpoints
+  - name: tickers
+    description: Utilities for mapping and resolving tickers
   - name: reports
     description: AI-generated investment reports
