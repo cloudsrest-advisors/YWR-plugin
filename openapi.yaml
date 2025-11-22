@@ -26,58 +26,66 @@ paths:
                     example: ok
 
   /v1/factor_scores/{ticker}:
-    get:
-      summary: Get latest YWR factor scores for a ticker
-      operationId: getFactorScores
-      tags:
-        - factor_scores
-      parameters:
-        - name: ticker
-          in: path
-          required: true
-          schema:
-            type: string
-          description: >
-            Returns the latest YWR factor model scores for a single stock.
-            The `ticker` path parameter can be a FactSet ticker (e.g. FDS-US)
-            or an alternate symbol such as an FMP-style ticker (e.g. AAPL).
-            The API will automatically resolve and map the ticker internally.
-            If you are unsure of the correct ticker, first call /v1/tickers/resolve.
+  get:
+    summary: Get latest YWR factor scores for a ticker
+    operationId: getFactorScores
+    tags:
+      - factor_scores
+    parameters:
+      - name: ticker
+        in: path
+        required: true
+        schema:
+          type: string
+        description: >
+          The resolved FactSet ticker for the stock (e.g. "AAPL-US", "MSFT-US").
+          Normally you MUST first resolve the user's input by calling
+          /v1/tickers/resolve and then use the returned `factset_ticker` here.
+          Only skip /v1/tickers/resolve if the user explicitly provides an exact
+          FactSet ticker that you are confident about.
       responses:
         '200':
           description: Latest factor scores
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/FactorScoreResponse'
-        '404':
-          description: Ticker not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '500':
-          description: Server error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
+                  $ref: '#/components/schemas/FactorScoreResponse'
+          '404':
+            description: Ticker not found
+            content:
+              application/json:
+                schema:
+                  $ref: '#/components/schemas/Error'
+          '500':
+            description: Server error
+            content:
+              application/json:
+                schema:
+                  $ref: '#/components/schemas/Error'
 
   /v1/tickers/resolve:
-    get:
-      summary: Resolve tickers by name or alternate symbols
-      operationId: resolveTicker
-      tags:
-        - tickers
-      parameters:
-        - name: query
-          in: query
-          required: true
-          schema:
-            type: string
-          description: Company name, FactSet ticker, or alternate ticker (e.g. AAPL, MSFT, TSLA).
-            Use this endpoint whenever you are not sure which ticker to use for other endpoints,
-            or when the user gives a company name instead of a specific ticker.
+  get:
+    summary: Resolve tickers by name or alternate symbols
+    operationId: resolveTicker
+    tags:
+      - tickers
+    parameters:
+      - name: query
+        in: query
+        required: true
+        schema:
+          type: string
+        description: >
+          Company name, brand, FactSet ticker, or alternate ticker (e.g. "Apple",
+          "Nvidia", "FDS-US", "AAPL", "7203").
+          ALWAYS use this endpoint first whenever the user provides a company name
+          or an uncertain/approximate ticker, and then take the best match's
+          `factset_ticker` for other endpoints like /v1/factor_scores/{ticker}.
+            Example usage:
+          - User: "What is the YWR factor score for Apple?"
+            1) Call GET /v1/tickers/resolve?query=Apple&limit=1
+            2) Take matches[0].factset_ticker (e.g. "AAPL-US")
+            3) Call GET /v1/factor_scores/AAPL-US
         - name: limit
           in: query
           required: false
