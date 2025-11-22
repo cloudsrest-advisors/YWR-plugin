@@ -391,3 +391,32 @@ app.include_router(factor_router)
 app.include_router(qarv_router)
 app.include_router(reports_router)
 app.include_router(ticker_router)
+
+
+# ---- Add privacy route ----
+
+from fastapi.responses import HTMLResponse
+
+@app.get("/privacy", include_in_schema=False)
+def privacy():
+    html = """
+    <html>
+      <head><title>YWR Intelligence – Privacy Policy</title></head>
+      <body style="font-family: sans-serif; max-width: 800px; margin: 40px auto;">
+        <h1>Privacy Policy</h1>
+        <p>Last updated: 2025-01-01</p>
+
+        <p>
+        This plugin does not store or collect personal data from users.  
+        Any data provided to the API (such as ticker queries) is used only 
+        to generate responses and is not retained beyond what is required 
+        for technical operation.
+        </p>
+
+        <p>
+        For questions, contact us at: support@ywr-intelligence.world
+        </p>
+      </body>
+    </html>
+    """
+    return HTMLResponse(content=html, status_code=200)
