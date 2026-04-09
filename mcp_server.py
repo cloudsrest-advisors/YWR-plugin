@@ -80,10 +80,14 @@ async def list_tools() -> list[types.Tool]:
             name="get_factor_scores",
             description=(
                 "Get YWR factor model scores for a specific stock ticker. "
-                "Returns estimate_score (earnings revision momentum), value_score "
-                "(valuation cheapness), price_score (6-month price momentum), and "
-                "total_score (60% estimate + 30% value + 10% price). "
+                "Returns: estimate_score (earnings revision momentum), "
+                "factor_value_score (valuation cheapness — this is the FACTOR MODEL value score, "
+                "different from the QARV value score), "
+                "price_score (6-month price momentum), and "
+                "total_score (composite: 60% estimate + 30% factor_value + 10% price). "
                 "All scores are percentile ranks 1–100 vs 10,000+ global stocks. "
+                "Use this tool when the user asks for 'factor scores', 'estimate score', "
+                "'momentum score', or 'factor value score'. "
                 "Use resolve_ticker first if you only have a company name."
             ),
             inputSchema={
@@ -101,9 +105,15 @@ async def list_tools() -> list[types.Tool]:
             name="get_qarv_scores",
             description=(
                 "Get YWR QARV scores for a specific stock ticker. "
-                "QARV = 70% quality + 30% value composite. "
-                "Returns quality_subscore, value_subscore, and overall_rank_quality_70_value_30. "
+                "QARV = 70% quality + 30% value composite — focuses on high-quality businesses "
+                "at reasonable prices, with NO momentum signal. "
+                "Returns: quality_subscore (business quality), "
+                "qarv_value_score (valuation — this is the QARV value score, "
+                "different from the factor model value score), "
+                "and overall_rank_quality_70_value_30 (composite QARV rank). "
                 "All scores are percentile ranks 1–100. "
+                "Use this tool when the user asks for 'QARV scores', 'quality score', "
+                "'quality value score', or 'QARV value score'. "
                 "Use resolve_ticker first if you only have a company name."
             ),
             inputSchema={
