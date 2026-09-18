@@ -3,4 +3,4 @@ uvicorn[standard]
 httpx
 pydantic
 python-dotenv
-mcp
+mcp>=1.30,<2

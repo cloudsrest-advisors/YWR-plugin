@@ -1,16 +1,10 @@
 """
 YWR Intelligence MCP Server — HTTP/SSE transport for Railway deployment.
 
-Users connect via Claude Desktop or Claude.ai by adding to their MCP config:
+Users connect via Claude Desktop or Claude.ai by adding a custom connector with URL:
 
-  {
-    "mcpServers": {
-      "ywr": {
-        "type": "sse",
-        "url": "https://ywr-plugin.up.railway.app/sse?token=YOUR_TOKEN"
-      }
-    }
-  }
+  https://api.ywr-intelligence.world/mcp?token=YOUR_TOKEN   (Streamable HTTP, preferred)
+  https://api.ywr-intelligence.world/sse?token=YOUR_TOKEN   (legacy SSE)
 
 Set MCP_ACCESS_TOKENS in Railway env vars as a comma-separated list of valid tokens.
 If not set, the server is open (useful for testing).
@@ -23,7 +17,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import JSONResponse
 from mcp.server.sse import SseServerTransport
-from starlette.routing import Mount
+from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
+from starlette.routing import Route
 
 from mcp_server import server as mcp_server
 
@@ -49,11 +44,17 @@ def _check_token(request: Request):
 
 sse_transport = SseServerTransport("/messages/")
 
+# Stateless so any replica can serve any request — no session to lose across restarts
+http_session_manager = StreamableHTTPSessionManager(
+    app=mcp_server, stateless=True, json_response=True
+)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("YWR MCP server starting")
-    yield
+    async with http_session_manager.run():
+        yield
     logger.info("YWR MCP server stopping")
 
 
@@ -75,6 +76,21 @@ async def handle_sse(request: Request):
         )
 
 
+class StreamableHTTPApp:
+    """ASGI endpoint for Streamable HTTP transport, with token check."""
+
+    async def __call__(self, scope, receive, send):
+        try:
+            _check_token(Request(scope))
+        except HTTPException as e:
+            await JSONResponse({"detail": e.detail}, status_code=e.status_code)(scope, receive, send)
+            return
+        await http_session_manager.handle_request(scope, receive, send)
+
+
+app.router.routes.append(Route("/mcp", endpoint=StreamableHTTPApp(), methods=["GET", "POST", "DELETE"]))
+
+
 @app.get("/health")
 async def health():
     return JSONResponse({"status": "ok", "server": "ywr-intelligence-mcp"})
@@ -84,7 +100,6 @@ async def health():
 async def root():
     return JSONResponse({
         "name": "YWR Intelligence MCP Server",
-        "transport": "SSE",
-        "endpoint": "/sse",
-        "docs": "Add ?token=YOUR_TOKEN to the SSE URL in your Claude MCP config",
+        "endpoints": {"streamable_http": "/mcp", "sse": "/sse"},
+        "docs": "Add ?token=YOUR_TOKEN to the URL in your Claude connector config",
     })
