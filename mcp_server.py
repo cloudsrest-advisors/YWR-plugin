@@ -28,6 +28,7 @@ import os
 import re
 import json
 import logging
+from urllib.parse import quote
 from typing import Any
 
 import httpx
@@ -207,6 +208,32 @@ async def list_tools() -> list[types.Tool]:
             }
         ),
         types.Tool(
+            name="get_portfolio",
+            description=(
+                "Get a YWR model portfolio — e.g. 'Dirty Dividends' or 'New Era Finance' — with "
+                "each holding's weight (percent) and its current YWR factor and QARV scores, plus "
+                "portfolio-weighted average scores. 'input_ticker' is the ticker the portfolio "
+                "actually holds (may be an ADR such as BCS); scores come from the company's home "
+                "listing (factset_ticker). ETFs and cash have no scores. "
+                "Call with no portfolio to list the available portfolios and their dates. "
+                "Pass date to see the portfolio as it was on a past date (latest rebalance on or "
+                "before that date, with scores from that time)."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "portfolio": {
+                        "type": "string",
+                        "description": "Portfolio name, e.g. 'Dirty Dividends'. Omit to list all portfolios."
+                    },
+                    "date": {
+                        "type": "string",
+                        "description": "As-of date YYYY-MM-DD (default: latest)"
+                    }
+                }
+            }
+        ),
+        types.Tool(
             name="get_top_ranked",
             description=(
                 "Get the top-ranked stocks from the YWR universe. "
@@ -291,6 +318,13 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[types.TextCont
             if arguments.get("end_date"):
                 params["end"] = arguments["end_date"]
             result = api_get(f"/rankings/company/{arguments['ticker']}/history", params)
+
+        elif name == "get_portfolio":
+            if arguments.get("portfolio"):
+                params = {"date": arguments["date"]} if arguments.get("date") else {}
+                result = api_get(f"/portfolios/{quote(arguments['portfolio'], safe='')}", params)
+            else:
+                result = api_get("/portfolios")
 
         elif name == "get_top_ranked":
             sort_by = arguments.get("sort_by", "total_score")
