@@ -129,6 +129,7 @@ async def list_tools() -> list[types.Tool]:
                 "price_score (6-month price momentum), and "
                 "total_score (composite: 60% estimate + 30% factor_value + 10% price). "
                 "All scores are percentile ranks 1–100 vs 10,000+ global stocks. "
+                "Requires the exact FactSet ticker (never substitutes another company). "
                 "Use this tool when the user asks for 'factor scores', 'estimate score', "
                 "'momentum score', or 'factor value score'. "
                 "Use resolve_ticker first if you only have a company name."
@@ -150,6 +151,10 @@ async def list_tools() -> list[types.Tool]:
                 "Get YWR QARV scores for a specific stock ticker. "
                 "QARV = 70% quality + 30% value composite — focuses on high-quality businesses "
                 "at reasonable prices, with NO momentum signal. "
+                "Coverage is narrower than the factor model (~4,700 vs ~11,000 stocks): most developed "
+                "markets, partial China/Japan/Taiwan, and none for South Korea, Saudi Arabia, India or "
+                "Thailand — a stock outside it returns an explicit 'no QARV score' error, so use "
+                "get_factor_scores there. Requires the exact FactSet ticker. "
                 "Returns: quality_subscore (business quality), "
                 "qarv_value_score (valuation — this is the QARV value score, "
                 "different from the factor model value score), "
@@ -300,24 +305,33 @@ async def list_tools() -> list[types.Tool]:
 async def call_tool(name: str, arguments: dict[str, Any]) -> list[types.TextContent]:
     try:
         if name == "get_factor_scores":
-            result = api_get(f"/rankings/company/{arguments['ticker']}")
-            # Return just the factor scores portion
+            # exact ticker only: never answer with a different company's scores
+            result = api_get(f"/rankings/company/{quote(arguments['ticker'], safe='')}", {"exact": "true"})
             if "factor_scores" in result:
-                result = result["factor_scores"] or {"error": f"No factor scores found for {arguments['ticker']}"}
+                result = result["factor_scores"] or {
+                    "error": f"No factor scores for {result['resolved_ticker']} ({result['name']})."}
+            elif "error" in result:
+                result = {"error": f"No scored stock with ticker {arguments['ticker']}. "
+                                   "Use resolve_ticker to find the FactSet ticker."}
 
         elif name == "get_qarv_scores":
-            result = api_get(f"/rankings/company/{arguments['ticker']}")
-            # Return just the QARV scores portion
+            result = api_get(f"/rankings/company/{quote(arguments['ticker'], safe='')}", {"exact": "true"})
             if "qarv_scores" in result:
-                result = result["qarv_scores"] or {"error": f"No QARV scores found for {arguments['ticker']}"}
+                result = result["qarv_scores"] or {
+                    "error": f"No QARV score for {result['resolved_ticker']} ({result['name']}): it is not in "
+                             "the QARV universe, which is narrower than the factor model's (mostly developed "
+                             "markets). Use get_factor_scores for this stock."}
+            elif "error" in result:
+                result = {"error": f"No scored stock with ticker {arguments['ticker']}. "
+                                   "Use resolve_ticker to find the FactSet ticker."}
 
         elif name == "get_score_history":
-            params = {"frequency": arguments.get("frequency", "monthly")}
+            params = {"frequency": arguments.get("frequency", "monthly"), "exact": "true"}
             if arguments.get("start_date"):
                 params["start"] = arguments["start_date"]
             if arguments.get("end_date"):
                 params["end"] = arguments["end_date"]
-            result = api_get(f"/rankings/company/{arguments['ticker']}/history", params)
+            result = api_get(f"/rankings/company/{quote(arguments['ticker'], safe='')}/history", params)
 
         elif name == "get_portfolio":
             if arguments.get("portfolio"):
@@ -346,16 +360,19 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[types.TextCont
             # YWR Registry first; fall back to fuzzy search over scores and ticker_map
             result = resolve_via_registry(arguments["query"])
             if result is None:
-                fallback = api_get(f"/rankings/company/{arguments['query']}")
+                fallback = api_get(f"/rankings/company/{quote(arguments['query'], safe='')}")
                 if "error" not in fallback:
                     ticker_map = fallback.get("ticker_map") or {}
                     scores = fallback.get("factor_scores") or fallback.get("qarv_scores") or {}
                     result = {
                         "query": arguments["query"],
                         "source": "search",
-                        "factset_ticker": ticker_map.get("factset_ticker") or scores.get("ticker"),
-                        "name": ticker_map.get("name") or scores.get("name"),
+                        "match": fallback.get("match"),
+                        "factset_ticker": fallback.get("resolved_ticker") or ticker_map.get("factset_ticker") or scores.get("ticker"),
+                        "name": fallback.get("name") or ticker_map.get("name") or scores.get("name"),
                     }
+                    if fallback.get("match") == "fuzzy":
+                        result["note"] = "Best partial match — confirm this is the company the user meant."
                 else:
                     result = {"query": arguments["query"], "error": "No matching ticker found. Try a different name or ticker format."}
 
