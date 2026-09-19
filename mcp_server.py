@@ -128,6 +128,43 @@ async def list_tools() -> list[types.Tool]:
             }
         ),
         types.Tool(
+            name="get_score_history",
+            description=(
+                "Get historical YWR scores for a specific stock over a date range: both "
+                "factor model scores (factor_score, estimate_score, value_score, price_score) "
+                "and QARV scores (qarv_score, quality_subscore, value_subscore) over time. "
+                "All scores are percentile ranks 1–100. With weekly/monthly/quarterly frequency, "
+                "each row is the last available score in that period. "
+                "Use this tool when the user asks how a stock's scores have changed, "
+                "for score trends, or for scores as of a past date. "
+                "Use resolve_ticker first if you only have a company name."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "ticker": {
+                        "type": "string",
+                        "description": "FactSet ticker (e.g. AAPL-US, 7203-TYO)"
+                    },
+                    "start_date": {
+                        "type": "string",
+                        "description": "Start date YYYY-MM-DD (default: 1 year before end_date)"
+                    },
+                    "end_date": {
+                        "type": "string",
+                        "description": "End date YYYY-MM-DD (default: today)"
+                    },
+                    "frequency": {
+                        "type": "string",
+                        "enum": ["daily", "weekly", "monthly", "quarterly"],
+                        "description": "Sampling frequency. Default: monthly. Use daily only for short ranges.",
+                        "default": "monthly"
+                    }
+                },
+                "required": ["ticker"]
+            }
+        ),
+        types.Tool(
             name="get_top_ranked",
             description=(
                 "Get the top-ranked stocks from the YWR universe. "
@@ -202,6 +239,14 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[types.TextCont
             # Return just the QARV scores portion
             if "qarv_scores" in result:
                 result = result["qarv_scores"] or {"error": f"No QARV scores found for {arguments['ticker']}"}
+
+        elif name == "get_score_history":
+            params = {"frequency": arguments.get("frequency", "monthly")}
+            if arguments.get("start_date"):
+                params["start"] = arguments["start_date"]
+            if arguments.get("end_date"):
+                params["end"] = arguments["end_date"]
+            result = api_get(f"/rankings/company/{arguments['ticker']}/history", params)
 
         elif name == "get_top_ranked":
             sort_by = arguments.get("sort_by", "total_score")
