@@ -17,7 +17,7 @@ Claude Desktop config (~/.claude/claude_desktop_config.json or
         "args": ["/path/to/mcp_server.py"],
         "env": {
           "YWR_API_KEY": "your-api-key-here",
-          "YWR_API_URL": "https://ywr-data-api.up.railway.app"
+          "YWR_API_URL": "https://data.ywr-intelligence.world"
         }
       }
     }
@@ -42,7 +42,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 YWR_API_KEY = os.getenv("YWR_API_KEY")
-YWR_API_URL = os.getenv("YWR_API_URL", "https://ywr-data-api.up.railway.app").rstrip("/")
+YWR_API_URL = os.getenv("YWR_API_URL", "https://data.ywr-intelligence.world").rstrip("/")
 
 server = Server("ywr-intelligence")
 
