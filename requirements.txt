@@ -4,3 +4,4 @@ httpx
 pydantic
 python-dotenv
 mcp>=1.30,<2
+psycopg[binary]
