@@ -25,6 +25,7 @@ Claude Desktop config (~/.claude/claude_desktop_config.json or
 """
 
 import os
+import re
 import json
 import logging
 from typing import Any
@@ -71,6 +72,45 @@ def api_get(path: str, params: dict = None) -> dict:
         return {"error": str(e)}
 
 
+def api_post(path: str, body: dict) -> dict:
+    if not YWR_API_KEY:
+        return {"error": "YWR_API_KEY not set. Add it to your Claude Desktop MCP config."}
+    try:
+        r = httpx.post(
+            f"{YWR_API_URL}{path}",
+            headers={"X-YWR-Api-Key": YWR_API_KEY},
+            json=body,
+            timeout=30,
+        )
+        r.raise_for_status()
+        return r.json()
+    except Exception as e:
+        logger.error(f"API POST {path} failed: {e}")
+        return {"error": str(e)}
+
+
+# Queries the Registry accepts: ticker-like, no spaces (mirrors the data API's check)
+_REGISTRY_QUERY_RE = re.compile(r"^[A-Z0-9][A-Z0-9.:-]{0,19}$")
+
+
+def resolve_via_registry(query: str) -> dict | None:
+    """Resolve a ticker (or single-word name) through YWR Registry. None if no match."""
+    q = query.strip().upper()
+    if not _REGISTRY_QUERY_RE.fullmatch(q):
+        return None
+    result = api_post("/registry/resolve", {"tickers": [q]})
+    for row in result.get("resolved", []):
+        if row.get("factset_ticker"):
+            return {
+                "query": query,
+                "source": "YWR Registry",
+                "factset_ticker": row["factset_ticker"],
+                "name": row.get("target_name"),
+                "registry_uid": row.get("target_uid"),
+            }
+    return None
+
+
 # ── Tool definitions ──────────────────────────────────────────────────────────
 
 @server.list_tools()
@@ -95,7 +135,7 @@ async def list_tools() -> list[types.Tool]:
                 "properties": {
                     "ticker": {
                         "type": "string",
-                        "description": "FactSet ticker (e.g. AAPL-US, 7203-TYO, 000660-KRX)"
+                        "description": "FactSet ticker (e.g. AAPL-USA, 7203-TKS, 000660-KRX)"
                     }
                 },
                 "required": ["ticker"]
@@ -121,7 +161,7 @@ async def list_tools() -> list[types.Tool]:
                 "properties": {
                     "ticker": {
                         "type": "string",
-                        "description": "FactSet ticker (e.g. AAPL-US, 7203-TYO)"
+                        "description": "FactSet ticker (e.g. AAPL-USA, 7203-TKS)"
                     }
                 },
                 "required": ["ticker"]
@@ -144,7 +184,7 @@ async def list_tools() -> list[types.Tool]:
                 "properties": {
                     "ticker": {
                         "type": "string",
-                        "description": "FactSet ticker (e.g. AAPL-US, 7203-TYO)"
+                        "description": "FactSet ticker (e.g. AAPL-USA, 7203-TKS)"
                     },
                     "start_date": {
                         "type": "string",
@@ -200,9 +240,11 @@ async def list_tools() -> list[types.Tool]:
         types.Tool(
             name="resolve_ticker",
             description=(
-                "Search for a stock by company name or approximate ticker and return "
-                "the matching FactSet ticker. Always use this first when the user provides "
-                "a company name before calling get_factor_scores or get_qarv_scores."
+                "Search for a stock by ticker (any common format, including old tickers) or "
+                "company name and return the matching FactSet ticker and name, using the "
+                "YWR Registry with a fuzzy-search fallback. Always use this first when the "
+                "user provides a company name before calling get_factor_scores, "
+                "get_qarv_scores or get_score_history."
             ),
             inputSchema={
                 "type": "object",
@@ -265,19 +307,21 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[types.TextCont
             result = api_get("/rankings/top", params)
 
         elif name == "resolve_ticker":
-            # Use the top endpoint with a search — fall back to company lookup
-            result = api_get(
-                f"/rankings/company/{arguments['query']}",
-            )
-            if "error" not in result:
-                # Return ticker map info
-                result = {
-                    "query": arguments["query"],
-                    "ticker_map": result.get("ticker_map"),
-                    "factor_scores": result.get("factor_scores"),
-                }
-            else:
-                result = {"query": arguments["query"], "error": "No matching ticker found. Try a different name or ticker format."}
+            # YWR Registry first; fall back to fuzzy search over scores and ticker_map
+            result = resolve_via_registry(arguments["query"])
+            if result is None:
+                fallback = api_get(f"/rankings/company/{arguments['query']}")
+                if "error" not in fallback:
+                    ticker_map = fallback.get("ticker_map") or {}
+                    scores = fallback.get("factor_scores") or fallback.get("qarv_scores") or {}
+                    result = {
+                        "query": arguments["query"],
+                        "source": "search",
+                        "factset_ticker": ticker_map.get("factset_ticker") or scores.get("ticker"),
+                        "name": ticker_map.get("name") or scores.get("name"),
+                    }
+                else:
+                    result = {"query": arguments["query"], "error": "No matching ticker found. Try a different name or ticker format."}
 
         else:
             result = {"error": f"Unknown tool: {name}"}
