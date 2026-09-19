@@ -89,13 +89,15 @@ def api_post(path: str, body: dict) -> dict:
         return {"error": str(e)}
 
 
-# Queries the Registry accepts: ticker-like, no spaces (mirrors the data API's check)
-_REGISTRY_QUERY_RE = re.compile(r"^[A-Z0-9][A-Z0-9.:-]{0,19}$")
+# Queries the Registry accepts (mirrors the data API's check)
+_REGISTRY_QUERY_RE = re.compile(r"^[A-Z0-9][A-Z0-9.:-]{0,63}$")
 
 
 def resolve_via_registry(query: str) -> dict | None:
-    """Resolve a ticker (or single-word name) through YWR Registry. None if no match."""
-    q = query.strip().upper()
+    """Resolve a ticker or name through YWR Registry. None if no match.
+    Registry aliases are matched with spaces and punctuation stripped, so
+    "Bank of America" is sent as "BANKOFAMERICA" and still matches."""
+    q = re.sub(r"[^A-Z0-9.:-]", "", query.upper())
     if not _REGISTRY_QUERY_RE.fullmatch(q):
         return None
     result = api_post("/registry/resolve", {"tickers": [q]})
